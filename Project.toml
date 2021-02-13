@@ -1,0 +1,4 @@
+name = "finetools_graph"
+uuid = "3efe8cc0-d78b-4152-ae25-9f17c51e5516"
+authors = ["Oliver Evans <oliverevans96@gmail.com>"]
+version = "0.1.0"

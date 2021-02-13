@@ -4,6 +4,9 @@ using FinEtools
 using SymRCM: adjgraph
 using IterTools
 
+using JuMP
+using Cbc
+
 export create_t3_mesh
 function create_t3_mesh()
      # Start from tetrahedral mesh
@@ -41,29 +44,61 @@ end
 
 function isconnected(el1::T, el2::T) where T <: NTuple{3, FInt}
     # Two triangles share an edge if they have two nodes in common
-    length(el1 ∩ el2) > 1
+    length(el1 ∩ el2) == 2
 end
 
 export dualadj
 function dualadj(elems::AbstractFESet2Manifold)
     """
-    Construct the dual adjacency matrix for a triangular mesh.
-    In other words, determine which elements share an edge
+    Construct the dual adjacency graph for a triangular mesh.
+    In other words, determine which elements share an edge.
     """
-    num_elems = count(elems)
-    A::Vector{Vector{FInt}} = fill([], num_elems)
+    nelems = count(elems)
+    conn::Vector{Vector{Int}} = fill([], nelems)
+    node_edges::Vector{Vector{Int}} = fill([], nelems)
+    edges::Vector{NTuple{2, Int}} = []
 
-    for (i1, i2) in subsets(1:num_elems, 2)
+    nedges = 0
+    for (i1, i2) in subsets(1:nelems, 2)
         e1 = elems.conn[i1]
         e2 = elems.conn[i2]
         if isconnected(e1, e2)
-            push!(A[i1], i2)
-            push!(A[i2], i1)
+            nedges += 1
+
+            # Nodes are connected to each other
+            push!(conn[i1], i2)
+            push!(conn[i2], i1)
+
+            # Edge contains the nodes
+            push!(edges, (i1, i2))
+
+            # Nodes are on the edge
+            push!(node_edges[i1], nedges)
+            push!(node_edges[i2], nedges)
         end
     end
-    return A
+    return conn, edges, node_edges
 end
 
+
+function orient_edges(edges, node_edges; optimizer=Cbc.Optimizer)
+    nedges = length(edges)
+    nnodes = length(node_edges)
+    
+    model = Model(optimizer)
+    set_silent(model)
+    # # Which node should be used as the first in the pattern
+    # @variable(model, 1 <= orientation <= 3, Int)
+    # # Which variant of the pattern to use
+    # @variable(model, 1 <= variant <= 3, Bin)
+    @variable(model, orients[i=1:nedges], Bin)
+    @constraint(model, nodesum[i=1:nnodes], 1 <= sum(orients[node_edges[i]]) <= 2)
+    @objective(model, Min, sum(orients))
+    optimize!(model)
+
+    edge_orients = convert(BitArray, round.(Int, value.(labels)))
+    node_orients = [edge_orients[edges] for edges in node_edges]
+end
 
 export greet
 greet() = print("Hello World!")

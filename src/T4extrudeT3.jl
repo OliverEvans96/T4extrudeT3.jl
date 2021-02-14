@@ -1,6 +1,6 @@
 module T4extrudeT3
-using IterTools
 
+using IterTools
 using FinEtools
 using JuMP
 using Cbc

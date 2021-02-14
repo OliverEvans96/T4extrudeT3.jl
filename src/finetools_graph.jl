@@ -41,7 +41,6 @@ function get_edge_info(elems::FESetT3)
 
             # Store the nodes connected by the edge
             n1_ind, n2_ind = el1 ∩ el2
-            println("el $i1 ($el1) and el $i2 ($el2) are connected by edge $k, which joins n $n1_ind and n $n2_ind")
             push!(edge_nodes, (n1_ind, n2_ind))
         end
     end
@@ -127,7 +126,6 @@ function orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
                 ∉(edge_node_inds),
                 elem_node_inds
             )
-            println("A i=$i, nadj=$nadj, j=$j, k=$k, orient=$elem_orient")
             push!(elem_orients, elem_orient)
         else
             if nadj == 2
@@ -145,7 +143,6 @@ function orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
                     ∈(ed1_node_inds ∩ ed2_node_inds),
                     elem_node_inds
                 )
-                println("B i=$i, nadj=$nadj, j=$j, orient=$elem_orient")
                 push!(elem_orients, elem_orient)
             elseif nadj == 1
                 # Corner element, orientation underdetermined
@@ -161,12 +158,10 @@ function orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
                     isequal(start_node_ind),
                     elem_node_inds
                 )
-                println("C i=$i, nadj=$nadj, j=$j, k=$k, orient=$elem_orient")
                 push!(elem_orients, elem_orient)
             else # nadj == 0
                 # Element has no neighbors, so it can have any orientation.
                 elem_orient = 1
-                println("D i=$i, nadj=$nadj, j=$j, orient=$elem_orient")
                 push!(elem_orients, elem_orient)
             end
         end

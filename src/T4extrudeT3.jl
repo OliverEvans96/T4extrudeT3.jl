@@ -265,7 +265,7 @@ Edge-matching requires JuMP and Cbc (or another mixed-integer optimizer).
 `optimizer` = the optimizer to use if `naive = false`.
 Defaults to `Cbc.Optimizer` if Cbc is installed
 """
-function T4extrudeT3(fens::FENodeSet, fes::FESetT3, nLayers::FInt, extrusionh::F; naive::Bool=true, optimizer=nothing) where {F<:Function}
+function T4extrudeT3.T4extrudeT3(fens::FENodeSet, fes::FESetT3, nLayers::FInt, extrusionh::F; naive::Bool=true, optimizer=nothing) where {F<:Function}
     id = collect(1:count(fens))
     cn = connectednodes(fes)
     id[cn] = 1:length(cn)

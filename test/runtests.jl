@@ -1,4 +1,4 @@
-using finetools_graph
+using T4extrudeT3
 using FinEtools
 
 function create_t3_mesh()
@@ -49,5 +49,4 @@ efens, efes = T4extrudeT3(t3nodes, t3elems, nLayers, extrusionh, naive=false)
 
 # Write vtks
 vtkexportmesh("t3.vtk", t3nodes, t3elems)
-vtkexportmesh("t3new.vtk", t3newfens, t3newfes)
 vtkexportmesh("t4.vtk", efens, efes)

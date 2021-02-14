@@ -14,9 +14,17 @@ function create_t3_mesh()
     t4nodes.xyz[:,2] .+= ymin
     # Select boundary
     t3elems = meshboundary(t4elems)
-    # Exclude downward-ish faces (the floor)
+    # Select only the bottom
     bottom_inds = selectelem(t4nodes, t3elems, facing=true, direction=[0.0, 0.0, -1.0])
     t3elems = subset(t3elems, bottom_inds)
+    # Cut a circle out of the center
+    exclude_inds = selectelem(t4nodes, t3elems, distance=1.5, from=[(xmin+xmax)/2, (ymin+ymax)/2,0])
+    deleteat!(t3elems.conn, exclude_inds)
+    deleteat!(t3elems.label, exclude_inds)
+    # Cut another circle out of the corner
+    exclude_inds = selectelem(t4nodes, t3elems, distance=2.0, from=[xmin, ymin, 0])
+    deleteat!(t3elems.conn, exclude_inds)
+    deleteat!(t3elems.label, exclude_inds)
     # Create new node set with only selected nodes
     connected = findunconnnodes(t4nodes, t3elems);
     t3nodes, new_numbering = compactnodes(t4nodes, connected);
@@ -34,7 +42,7 @@ function extrusionh(x, k)
     # coordinates?
     # extrusion level index
     # return k == 0 ? x 
-    return x .+ [0.4k*sin(x[2]),0.2k*cos(x[1]),k]
+    return x .+ [0.1k*sin(x[2]),0.2k*cos(x[1]),k]
     # return x .+ [0,0,k]
 end
 efens, efes = T4extrudeT3(t3nodes, t3elems, nLayers, extrusionh, naive=false)

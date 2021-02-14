@@ -52,8 +52,6 @@ function orient_edges(nelems, edge_elems, optimizer=Cbc.Optimizer)
     model = Model(optimizer)
     set_silent(model)
 
-    # TODO: Initial guess heuristic?
-
     @variable(model, edge_orients[i=1:nelems, j=1:3], Bin)
 
     # Each element must contain edges of both orientations
@@ -93,7 +91,6 @@ function orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
     nedges = length(edge_orients)
     
     elem_variants::Vector{Int} = []
-
     # `elem_orients[i]` is the index of the start node
     # in `elem_nodes[i]`
     elem_orients::Vector{Int} = []

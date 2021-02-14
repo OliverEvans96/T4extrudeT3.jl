@@ -1,7 +1,7 @@
 module finetools_graph
-
 using IterTools
 
+using FinEtools
 using JuMP
 using Cbc
 
@@ -11,7 +11,7 @@ function isconnected(el1::T, el2::T) where T <: NTuple{3, Int}
 end
 
 export get_edge_info
-function get_edge_info(elems::AbstractFESet2Manifold)
+function get_edge_info(elems::FESetT3)
 
     # Index i = element number (index of `elems` and `elem_edges` (outer vector))
     # Index j = element-relative edge number (index of `elem_edges` (inner vectors))
@@ -48,7 +48,6 @@ function get_edge_info(elems::AbstractFESet2Manifold)
 end
 
 
-export orient_edges
 function orient_edges(nelems, edge_elems, optimizer=Cbc.Optimizer)
     model = Model(optimizer)
     set_silent(model)
@@ -79,19 +78,17 @@ function orient_edges(nelems, edge_elems, optimizer=Cbc.Optimizer)
 end
 
 
-export orient_elems
+"""
+For each element, determine:
+1. The "variant" of the tetrahedron to use
+    - Variant 0 = [0, 1, 0]
+    - Variant 1 = [1, 0, 1]
+2. The "orientation", which is defined as the index 
+in the element's node list of the unique node ("start node") 
+for which both connected edges have the same orientation 
+(which is equal to the variant)
+"""
 function orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
-    """
-
-    For each element, determine:
-    1. The "variant" of the tetrahedron to use
-        - Variant 0 = [0, 1, 0]
-        - Variant 1 = [1, 0, 1]
-    2. The "orientation", which is defined as the index 
-    in the element's node list of the unique node ("start node") 
-    for which both connected edges have the same orientation 
-    (which is equal to the variant)
-    """
     nelems = length(elem_nodes)
     nedges = length(edge_orients)
     
@@ -171,6 +168,115 @@ function orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
     end
 
     return elem_variants, elem_orients
+end
+
+"""
+Create three tetrahedral elements to join two triangles
+
+`lower` = node indices of lower triangle
+`upper` = node indices of upper triangle
+`variant` ∈ [0, 1] = "vertical" mirroring of the tetrahedrons
+`orient` ∈ [1, 2, 3] = rotation of the tetrahedrons around the "vertical" axis
+"""
+function extrude_one(lower::AbstractVector{FInt}, upper::AbstractVector{FInt}, variant=1, orient=1)
+    if variant == 0
+        # Swap the triangles to switch variants
+        tmp = upper
+        upper = lower
+        lower = tmp
+    end
+
+    if orient != 1
+        # Rotate the nodes to change the orientation
+        lower = circshift(lower, 1-orient)
+        upper = circshift(upper, 1-orient)
+    end
+
+    return [
+        lower[1] lower[2] lower[3] upper[2]
+        lower[1] upper[2] lower[3] upper[3]
+        lower[1] upper[2] upper[3] upper[1]
+    ]
+
+end
+
+
+function doextrude(fens, fes::FESetT3, nLayers, extrusionh, naive=true, optimizer=nothing)
+    nfes = count(fes)
+    nn1 = count(fens);
+    nnt = nn1*(nLayers+1);
+    ngc = 3 * nfes * nLayers;
+    hconn = zeros(FInt, ngc, 4);
+    conn = connasarray(fes)
+    xyz = zeros(FFlt, nnt, 3);
+
+    # Compute new node coordinates
+    for k=0:nLayers
+        for j=1:nn1
+            f=j+k*nn1;
+            xyz[f, :] = extrusionh(fens.xyz[j, :], k);
+        end
+    end
+
+    # Compute the correct variants and orientations for each 
+    elem_variants = fill(1, nfes)
+    elem_orients = fill(1, nfes)
+    if !naive
+        println("OH BOY")
+        optimizer = something(optimizer, Cbc.Optimizer)
+        edge_elems, edge_nodes, elem_edges = get_edge_info(fes)
+        edge_orients = orient_edges(nfes, edge_elems)
+        elem_variants, elem_orients = orient_elems(edge_orients, edge_nodes, fes.conn, elem_edges)
+    end
+
+    # Determine which nodes comprise the new elements
+    gc=1;
+    for k=1:nLayers
+        for i=1:nfes
+            lower = conn[i, :] .+ (k-1)*nn1
+            upper = conn[i, :] .+ k*nn1
+            variant = elem_variants[i]
+            orient = elem_orients[i]
+            hconn[gc:gc+2, :] = extrude_one(lower, upper, variant, orient)
+            gc += 3;
+        end
+    end
+
+    efes = FESetT4(hconn);
+    efens = FENodeSet(xyz);
+    return efens, efes
+end
+
+
+export T4extrudeT3
+"""
+    T4extrudeT3(fens::FENodeSet,  fes::FESetT3, nLayers::FInt, extrusionh::Function)
+
+Extrude a mesh of triangles (T3) into a mesh of tetrahedra (T4).
+
+`nLayers` = the number of newly created layers (in addition to the original, `k=0`)
+`extrusionh(x::Vector{Float64}, k::FInt)::Vector{Float64}` computes the coordinates
+of the the new node given the coordinates of the original node `x`, and the extruion level `k`.
+
+If `naive = true`, all triangles in the mesh will be extruded into tetrahedrons of the
+same orientation, which will likely generate non-matching edges 
+(i.e. two elements parially have overlapping boundaries with different node connectivities).
+Set `naive = false` to generate an extruded mesh with correctly matched edges.
+Edge-matching requires JuMP and Cbc (or another mixed-integer optimizer).
+
+`optimizer` = the optimizer to use if `naive = false`.
+Defaults to `Cbc.Optimizer` if Cbc is installed
+"""
+function T4extrudeT3(fens::FENodeSet, fes::FESetT3, nLayers::FInt, extrusionh::F; naive::Bool=true, optimizer=nothing) where {F<:Function}
+    println("Override extrude!")
+    id = vec([i for i in 1:count(fens)])
+    cn = connectednodes(fes);
+    id[cn[:]] = vec([i for i in 1:length(cn)]);
+    t3fes = deepcopy(fes);
+    updateconn!(t3fes, id);
+    t3fens = FENodeSet(fens.xyz[cn[:], :]);
+
+    return doextrude(t3fens, t3fes, nLayers, extrusionh, naive, optimizer);
 end
 
 end # module

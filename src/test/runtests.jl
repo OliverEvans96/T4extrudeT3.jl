@@ -28,9 +28,17 @@ function create_t3_mesh()
     return t3nodes, t3elems
 end
 
-nodes, elems = create_t3_mesh()
-elem_nodes = elems.conn
-edge_elems, edge_nodes, elem_edges = get_edge_info(elems)
+t3nodes, t3elems = create_t3_mesh()
+nLayers = 3
+function extrusionh(x, k)
+    # coordinates?
+    # extrusion level index
+    # return k == 0 ? x 
+    # return x .+ [0.3k*sin(x[2]),0.2k*cos(x[1]),k]
+    return x .+ [0,0,k]
+end
+t4nodes, t4elems = T4extrudeT3(t3nodes, t3elems, nLayers, extrusionh, naive=false)
 
-edge_orients = orient_edges(count(elems), edge_elems)
-elem_variants, elem_orients = orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
+# Write vtks
+vtkexportmesh("t3.vtk", t3nodes, t3elems)
+vtkexportmesh("t4.vtk", t4nodes, t4elems)

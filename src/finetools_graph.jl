@@ -40,11 +40,12 @@ function get_edge_info(elems::FESetT3)
             ))
 
             # Store the nodes connected by the edge
-            n1_ind, n2_ind = elems.conn[i1] ∩ elems.conn[i2]
+            n1_ind, n2_ind = el1 ∩ el2
+            println("el $i1 ($el1) and el $i2 ($el2) are connected by edge $k, which joins n $n1_ind and n $n2_ind")
             push!(edge_nodes, (n1_ind, n2_ind))
         end
     end
-    return edge_elems, edge_nodes, elem_edges
+    return elem_edges, edge_elems, edge_nodes
 end
 
 
@@ -74,7 +75,7 @@ function orient_edges(nelems, edge_elems, optimizer=Cbc.Optimizer)
     end
 
     optimize!(model)
-    return convert(BitArray, round.(Int, value.(edge_orients)))
+    return round.(Int, value.(edge_orients))
 end
 
 
@@ -123,9 +124,10 @@ function orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
             edge_node_inds = edge_nodes[k]
             # Get the local index of the node not in the center edge
             elem_orient = findfirst(
-                ∌(edge_node_inds),
+                ∉(edge_node_inds),
                 elem_node_inds
             )
+            println("A i=$i, nadj=$nadj, j=$j, k=$k, orient=$elem_orient")
             push!(elem_orients, elem_orient)
         else
             if nadj == 2
@@ -143,6 +145,7 @@ function orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
                     ∈(ed1_node_inds ∩ ed2_node_inds),
                     elem_node_inds
                 )
+                println("B i=$i, nadj=$nadj, j=$j, orient=$elem_orient")
                 push!(elem_orients, elem_orient)
             elseif nadj == 1
                 # Corner element, orientation underdetermined
@@ -158,10 +161,12 @@ function orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
                     isequal(start_node_ind),
                     elem_node_inds
                 )
+                println("C i=$i, nadj=$nadj, j=$j, k=$k, orient=$elem_orient")
                 push!(elem_orients, elem_orient)
             else # nadj == 0
                 # Element has no neighbors, so it can have any orientation.
                 elem_orient = 1
+                println("D i=$i, nadj=$nadj, j=$j, orient=$elem_orient")
                 push!(elem_orients, elem_orient)
             end
         end
@@ -178,8 +183,8 @@ Create three tetrahedral elements to join two triangles
 `variant` ∈ [0, 1] = "vertical" mirroring of the tetrahedrons
 `orient` ∈ [1, 2, 3] = rotation of the tetrahedrons around the "vertical" axis
 """
-function extrude_one(lower::AbstractVector{FInt}, upper::AbstractVector{FInt}, variant=1, orient=1)
-    if variant == 0
+function extrude_one(lower::AbstractVector{FInt}, upper::AbstractVector{FInt}, variant=0, orient=1)
+    if variant == 1
         # Swap the triangles to switch variants
         tmp = upper
         upper = lower
@@ -192,10 +197,12 @@ function extrude_one(lower::AbstractVector{FInt}, upper::AbstractVector{FInt}, v
         upper = circshift(upper, 1-orient)
     end
 
+    # If the above variant and orient transformations are ignored,
+    # this will produce a variant 0, orient 1 extrusion
     return [
-        lower[1] lower[2] lower[3] upper[2]
-        lower[1] upper[2] lower[3] upper[3]
-        lower[1] upper[2] upper[3] upper[1]
+        lower[1] lower[2] lower[3] upper[3]
+        lower[1] lower[2] upper[3] upper[1]
+        upper[1] lower[2] upper[3] upper[2]
     ]
 
 end
@@ -222,9 +229,8 @@ function doextrude(fens, fes::FESetT3, nLayers, extrusionh, naive=true, optimize
     elem_variants = fill(1, nfes)
     elem_orients = fill(1, nfes)
     if !naive
-        println("OH BOY")
         optimizer = something(optimizer, Cbc.Optimizer)
-        edge_elems, edge_nodes, elem_edges = get_edge_info(fes)
+        elem_edges, edge_elems, edge_nodes = get_edge_info(fes)
         edge_orients = orient_edges(nfes, edge_elems)
         elem_variants, elem_orients = orient_elems(edge_orients, edge_nodes, fes.conn, elem_edges)
     end
@@ -260,7 +266,7 @@ of the the new node given the coordinates of the original node `x`, and the extr
 
 If `naive = true`, all triangles in the mesh will be extruded into tetrahedrons of the
 same orientation, which will likely generate non-matching edges 
-(i.e. two elements parially have overlapping boundaries with different node connectivities).
+(i.e. two coplanar triangles share only two nodes)
 Set `naive = false` to generate an extruded mesh with correctly matched edges.
 Edge-matching requires JuMP and Cbc (or another mixed-integer optimizer).
 
@@ -268,15 +274,14 @@ Edge-matching requires JuMP and Cbc (or another mixed-integer optimizer).
 Defaults to `Cbc.Optimizer` if Cbc is installed
 """
 function T4extrudeT3(fens::FENodeSet, fes::FESetT3, nLayers::FInt, extrusionh::F; naive::Bool=true, optimizer=nothing) where {F<:Function}
-    println("Override extrude!")
-    id = vec([i for i in 1:count(fens)])
-    cn = connectednodes(fes);
-    id[cn[:]] = vec([i for i in 1:length(cn)]);
-    t3fes = deepcopy(fes);
-    updateconn!(t3fes, id);
-    t3fens = FENodeSet(fens.xyz[cn[:], :]);
+    id = collect(1:count(fens))
+    cn = connectednodes(fes)
+    id[cn] = 1:length(cn)
+    t3fes = deepcopy(fes)
+    updateconn!(t3fes, id)
+    t3fens = FENodeSet(fens.xyz[cn, :])
 
-    return doextrude(t3fens, t3fes, nLayers, extrusionh, naive, optimizer);
+    return doextrude(t3fens, t3fes, nLayers, extrusionh, naive, optimizer)
 end
 
 end # module

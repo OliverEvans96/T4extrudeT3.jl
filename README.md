@@ -9,6 +9,10 @@ This is a small extension of [FinEtools.jl](https://github.com/PetrKryslUCSD/Fin
 
 A triangular extrusion is performed by taking an initial triangle, creating a final triangle, and connecting them with three tetrahedra. 
 All of the possible tetrahedral connections can be derived from one another through rotation around the "vertical axis" and "vertical" inversion.
+The following diagram shows a pair of vertically inverted tetrahedral connections.
+
+![diagram](images/diagram.png)
+
 The naive implementation of a triangular mesh extrusion is to orient all extruded tetrahedra identically, but this almost inevitably leads to edge mismatch, where two tetrahedra can have an improper adjacency, where they have coplanar faces which share only two nodes, disagreeing on the third node.
 
 This can at least cause visual artifacts in Paraview as shown below, and can probably also lead to bigger problems in calculations.

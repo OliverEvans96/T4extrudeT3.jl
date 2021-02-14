@@ -3,6 +3,8 @@ using finetools_graph
 
 nodes, elems = create_t3_mesh()
 nodeadj = adjgraph(nodes, elems)
-elemadj, edges, node_edges = dualadj(elems)
+elem_nodes = elems.conn
+edge_elems, edge_nodes, elem_edges = dualadj(elems)
 
-orientations = finetools_graph.orient_edges(edges, node_edges)
+edge_orients = orient_edges(count(elems), edge_elems)
+elem_variants, elem_orients = orient_elems(edge_orients, edge_nodes, elem_nodes, elem_edges)
